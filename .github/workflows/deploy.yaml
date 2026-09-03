@@ -35,6 +35,34 @@ jobs:
       - name: Build website
         run: pnpm build
 
+      - name: Verify Cloudflare access
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [[ -z "$CLOUDFLARE_API_TOKEN" ]]; then
+            echo "::error::CLOUDFLARE_API_TOKEN is missing from this repository's Actions secrets."
+            exit 1
+          fi
+          if [[ -z "$CLOUDFLARE_ACCOUNT_ID" ]]; then
+            echo "::error::CLOUDFLARE_ACCOUNT_ID is missing from this repository's Actions secrets."
+            exit 1
+          fi
+
+          response_file="$(mktemp)"
+          status="$(curl --silent --show-error --output "$response_file" --write-out '%{http_code}' \
+            --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/subdomain")"
+
+          if [[ "$status" != "200" ]] || [[ "$(jq -r '.success' "$response_file")" != "true" ]]; then
+            message="$(jq -r '[.errors[]? | (.code | tostring) + ": " + .message] | join("; ")' "$response_file")"
+            echo "::error::Cloudflare access check failed (HTTP $status): ${message:-Unknown Cloudflare error}"
+            exit 1
+          fi
+
+          echo "Cloudflare credentials and Workers account access verified."
+
       - name: Deploy Worker
         run: pnpm exec wrangler deploy --config dist/server/wrangler.json
         env:
