@@ -236,7 +236,22 @@ function Reveal({
   children: React.ReactNode;
   className?: string;
 }) {
-  return <div className={`reveal ${className}`}>{children}</div>;
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const element = ref.current;
+    if (!element) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => entry.isIntersecting && element.classList.add('shown'),
+      { threshold: 0.08 },
+    );
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+  return (
+    <div ref={ref} className={`reveal ${className}`}>
+      {children}
+    </div>
+  );
 }
 function Shell({
   path,
@@ -245,15 +260,6 @@ function Shell({
   path: string;
   children: React.ReactNode;
 }) {
-  useEffect(() => {
-    const o = new IntersectionObserver(
-      (es) =>
-        es.forEach((e) => e.isIntersecting && e.target.classList.add('shown')),
-      { threshold: 0.08 },
-    );
-    document.querySelectorAll('.reveal').forEach((el) => o.observe(el));
-    return () => o.disconnect();
-  }, [path]);
   return (
     <div className="site">
       <Header path={path} />
